@@ -36,6 +36,18 @@ static void canardFree(CanardInstance* const ins, void* const pointer)
     vPortFree(pointer);
 }
 
+/**
+ * @brief CAN RX FIFO0 interrupt callback handler
+ * @param hfdcan: FDCAN handle pointer
+ * @param RxFifo0ITs: Interrupt sources flags
+ * 
+ * This ISR callback handles new CAN messages in FIFO0:
+ * 1. Retrieves message from hardware FIFO
+ * 2. Copies data to pre-allocated buffer pool
+ * 3. Queues message for processing in task context
+ * 
+ * Note: Uses circular buffer pool to prevent heap fragmentation in ISR
+ */
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
     if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
@@ -58,6 +70,16 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     }
 }
 
+/**
+ * @brief Initialize libcanard instance and related resources
+ * @param node_id: CAN node ID for this device
+ * 
+ * Initializes:
+ * - libcanard instance with custom allocators
+ * - TX queue for message transmission
+ * - Mutex for thread-safe operations
+ * - RX queue for message processing
+ */
 void canardInit(uint32_t node_id)
 {
     canard_instance = canardInit(&canardAllocate, &canardFree);
@@ -67,6 +89,17 @@ void canardInit(uint32_t node_id)
     can_rx_queue = xQueueCreate(CAN_RX_QUEUE_LENGTH, sizeof(struct CanRxItem));
 }
 
+/**
+ * @brief Transmit a CAN message using libcanard
+ * @param transfer: Pointer to CanardTxTransfer structure
+ * @return true if message queued successfully, false otherwise
+ * 
+ * This function:
+ * - Locks mutex for thread-safe access
+ * - Configures FDCAN header from libcanard frame
+ * - Queues message to hardware TX FIFO
+ * - Unlocks mutex after transmission
+ */
 bool canardTransmit(const CanardTxTransfer* transfer)
 {
     xSemaphoreTake(canard_mutex, portMAX_DELAY);
@@ -90,6 +123,16 @@ bool canardTransmit(const CanardTxTransfer* transfer)
     return status == HAL_OK;
 }
 
+/**
+ * @brief Process received CAN frame through libcanard
+ * @param rx_header: Pointer to FDCAN RX header
+ * @param rx_data: Pointer to received payload data
+ * 
+ * This function:
+ * 1. Converts FDCAN header to libcanard frame format
+ * 2. Passes frame to libcanard RX acceptance logic
+ * 3. Calls application handler if transfer is accepted
+ */
 void canardProcessRx(FDCAN_RxHeaderTypeDef* rx_header, uint8_t* rx_data)
 {
     CanardFrame frame = {
@@ -104,6 +147,16 @@ void canardProcessRx(FDCAN_RxHeaderTypeDef* rx_header, uint8_t* rx_data)
     }
 }
 
+/**
+ * @brief FreeRTOS task for processing received CAN messages
+ * @param argument: FreeRTOS task parameters (unused)
+ * 
+ * This task:
+ * - Continuously checks for new messages in RX queue
+ * - Processes messages through libcanard stack
+ * - Manages buffer pool recycling
+ * - Runs at higher priority than other CAN tasks
+ */
 void canardRxTask(void *argument)
 {
     struct CanRxItem {
