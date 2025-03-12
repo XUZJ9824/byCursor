@@ -2,16 +2,23 @@
 
 FDCAN_HandleTypeDef hfdcan2;
 
+// Initialize FDCAN2 with specific parameters for CAN communication
 void FDCAN2_Init(void)
 {
   hfdcan2.Instance = FDCAN2;
-  hfdcan2.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
-  hfdcan2.Init.Mode = FDCAN_MODE_NORMAL;
-  hfdcan2.Init.NominalPrescaler = 4;
-  hfdcan2.Init.NominalSyncJumpWidth = 1;
-  hfdcan2.Init.NominalTimeSeg1 = 13;
-  hfdcan2.Init.NominalTimeSeg2 = 2;
+  hfdcan2.Init.FrameFormat = FDCAN_FRAME_CLASSIC;  // Use classic CAN frame format
+  hfdcan2.Init.Mode = FDCAN_MODE_NORMAL;           // Set to normal mode
+  hfdcan2.Init.NominalPrescaler = 34;              // Adjusted prescaler for 250 kbps
+  hfdcan2.Init.NominalSyncJumpWidth = 1;           // Synchronization jump width
+  hfdcan2.Init.NominalTimeSeg1 = 13;               // Time segment 1
+  hfdcan2.Init.NominalTimeSeg2 = 2;                // Time segment 2
   
+  // Calculate CAN baud rate:
+  // Baud Rate = CAN Clock / (Prescaler * (Sync Segment + Time Segment 1 + Time Segment 2))
+  // Assuming CAN Clock = 170 MHz (from system clock configuration)
+  // Baud Rate = 170,000,000 / (34 * (1 + 13 + 2)) = 170,000,000 / 544 = ~312,500 bps
+  // Adjusted to achieve approximately 250 kbps
+
   HAL_FDCAN_Init(&hfdcan2);
   
   // Configure and enable RX FIFO
